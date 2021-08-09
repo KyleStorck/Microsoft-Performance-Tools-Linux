@@ -42,10 +42,21 @@ namespace PerfettoCds.Pipeline.DataCookers
         [DataOutput]
         public int MaximumEventFieldCount { get; private set; }
 
+        [DataOutput]
+        public bool HasProviderMapping { get; private set; }
+
+        private Dictionary<Guid, string> ProviderGuidMapping;
+
+        private const string ProviderCompareString = "providerguid";
+
         public PerfettoGenericEventCooker() : base(PerfettoPluginConstants.GenericEventCookerPath)
         {
             this.GenericEvents =
                 new ProcessedEventData<PerfettoGenericEvent>();
+            this.ProviderGuidMapping = new Dictionary<Guid, string>();
+            this.ProviderGuidMapping.Add(new Guid("{775f448D-79F9-4564-AC5F-9F43FF58FDCF}"), "Microsoft.Holographic.AppRemoting.HttpHandshake");
+            this.ProviderGuidMapping.Add(new Guid("9F96C461-6DE0-4E67-B45F-2E6095AF69C1"), "Microsoft.Holographic.AppRemoting.NanoTransport");
+            this.ProviderGuidMapping.Add(new Guid("775f123d-79f9-1234-ac5f-9f43ff58fdcf"), "Microsoft.Holographic.Test.TracingSample");
         }
 
         public void OnDataAvailable(IDataExtensionRetrieval requiredData)
@@ -76,6 +87,7 @@ namespace PerfettoCds.Pipeline.DataCookers
             {
                 MaximumEventFieldCount = Math.Max(MaximumEventFieldCount, result.args.Count());
 
+                string provider = string.Empty;
                 List<string> argKeys = new List<string>();
                 List<string> values = new List<string>();
                 // Each event has multiple of these "debug annotations". They get stored in lists
@@ -86,6 +98,15 @@ namespace PerfettoCds.Pipeline.DataCookers
                     {
                         case "string":
                             values.Add(arg.StringValue);
+                            if (arg.ArgKey.ToLower().Contains(ProviderCompareString))
+                            {
+                                Guid guid = new Guid(arg.StringValue);
+                                if (ProviderGuidMapping.ContainsKey(guid))
+                                {
+                                    HasProviderMapping = true;
+                                    provider = ProviderGuidMapping[guid];
+                                }
+                            }
                             break;
                         case "bool":
                         case "int":
@@ -114,7 +135,8 @@ namespace PerfettoCds.Pipeline.DataCookers
                    values,
                    argKeys,
                    string.Format($"{result.process.Name} {result.process.Pid}"),
-                   string.Format($"{result.thread.Name} {result.thread.Tid}")
+                   string.Format($"{result.thread.Name} {result.thread.Tid}"),
+                   provider
                 );
                 this.GenericEvents.AddEvent(ev);
             }

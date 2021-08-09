@@ -58,12 +58,19 @@ namespace PerfettoCds.Pipeline.Tables
             new ColumnMetadata(new Guid("{01d2b15f-b0fc-4444-a240-0a96f62c2c50}"), "Type", "Type of the event"),
             new UIHints { Width = 70 });
 
+        private static readonly ColumnConfiguration ProviderColumn = new ColumnConfiguration(
+            new ColumnMetadata(new Guid("{e7d08f97-f52c-4686-bc49-737f7a6a8bbb}"), "Provider", "Provider name of the event"),
+            new UIHints { Width = 210 });
+
         public static void BuildTable(ITableBuilder tableBuilder, IDataExtensionRetrieval tableData)
         {
             // We dynamically adjust the column headers
             // This is the max number of fields we can expect for this table
             int maxFieldCount = Math.Min(AbsoluteMaxFields, tableData.QueryOutput<int>(
                 new DataOutputPath(PerfettoPluginConstants.GenericEventCookerPath, nameof(PerfettoGenericEventCooker.MaximumEventFieldCount))));
+
+            bool hasProviderMapping = tableData.QueryOutput<bool>(
+                new DataOutputPath(PerfettoPluginConstants.GenericEventCookerPath, nameof(PerfettoGenericEventCooker.HasProviderMapping)));
 
             // Get data from the cooker
             var events = tableData.QueryOutput<ProcessedEventData<PerfettoGenericEvent>>(
@@ -72,6 +79,7 @@ namespace PerfettoCds.Pipeline.Tables
             // Start construction of the column order. Pivot on process and thread
             List<ColumnConfiguration> allColumns = new List<ColumnConfiguration>() 
             {
+                ProviderColumn,
                 ProcessNameColumn,
                 ThreadNameColumn,
                 TableConfiguration.PivotColumn, // Columns before this get pivotted on
@@ -125,6 +133,12 @@ namespace PerfettoCds.Pipeline.Tables
                 TypeColumn,
                 genericEventProjection.Compose((genericEvent) => genericEvent.Type));
             tableGenerator.AddColumn(typeColumn);
+
+            var providerColumn = new BaseDataColumn<string>(
+                ProviderColumn,
+                genericEventProjection.Compose((genericEvent) => genericEvent.Provider));
+            tableGenerator.AddColumn(providerColumn);
+            ProviderColumn.DisplayHints.IsVisible = hasProviderMapping;
 
             // Add the field columns, with column names depending on the given event
             for (int index = 0; index < maxFieldCount; index++)
